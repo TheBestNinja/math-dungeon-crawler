@@ -36,12 +36,10 @@ export function pickWall(x, y, grid, rules = DEFAULT_RULES) {
   }
 
   if (n) {
+    // Inner corners stay on the lip row; outer 25/27 sit one tile
+    // west/east into the wall (see below) — sampleMap 25|26…|27.
     if (w && !e) return R.wall_south_inner_w;
     if (e && !w) return R.wall_south_inner_e;
-    if (!w && !e) {
-      if (ne && !nw) return R.wall_south_sw;
-      if (nw && !ne) return R.wall_south_se;
-    }
     return R.wall_south;
   }
 
@@ -56,6 +54,28 @@ export function pickWall(x, y, grid, rules = DEFAULT_RULES) {
     const s2 = walkable(grid, x, y + 2);
     if (southIsWall && s2) return R.wall_east_alt;
     return R.wall_east;
+  }
+
+  // Outer south-lip SW/SE: one tile inside the wall, immediately
+  // west/east of the floor-adjacent lip run (N is wall/rim, floor
+  // only on the NE/NW diagonal toward the lip).
+  if (!n && !s && !e && !w) {
+    if (
+      ne &&
+      !nw &&
+      x + 1 < grid[0].length &&
+      grid[y][x + 1] === CELL.WALL
+    ) {
+      return R.wall_south_sw; // 25
+    }
+    if (
+      nw &&
+      !ne &&
+      x > 0 &&
+      grid[y][x - 1] === CELL.WALL
+    ) {
+      return R.wall_south_se; // 27
+    }
   }
 
   if (se && !s && !e && !sw && !n && !w) return R.wall_west;
