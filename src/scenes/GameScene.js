@@ -48,26 +48,21 @@ export default class GameScene extends Phaser.Scene {
       Array.from({ length: width }, () => false)
     );
 
+    // Sample.png style: every non-floor cell is wall mass (brown tops).
+    // Brick faces only on cells with floor to the south.
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const cell = grid[y][x];
         const px = x * TILE_SIZE * SCALE;
         const py = y * TILE_SIZE * SCALE;
-        let frame = TILE.VOID;
+        let frame;
 
-        if (cell === CELL.FLOOR) {
+        if (cell === CELL.FLOOR || cell === CELL.STAIRS) {
           frame = this.pickFloor(x, y);
           this.walkable[y][x] = true;
-        } else if (cell === CELL.WALL) {
-          frame = this.pickWall(x, y, grid);
-        } else if (cell === CELL.STAIRS) {
-          // Floor under stairs, stairs sprite on top
-          frame = TILE.FLOOR_STONE;
-          this.walkable[y][x] = true;
         } else {
-          // Leave void empty so the dark scene background reads behind
-          // brown wall-tops (tiles 13/15) instead of blending into tile 0.
-          continue;
+          // WALL and VOID both render as wall terrain (continuous brown mass)
+          frame = this.pickWall(x, y, grid);
         }
 
         const spr = this.add
@@ -75,7 +70,6 @@ export default class GameScene extends Phaser.Scene {
           .setOrigin(0)
           .setScale(SCALE)
           .setDepth(0);
-        // Nearest neighbor
         spr.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
 
         if (cell === CELL.STAIRS) {
@@ -130,10 +124,10 @@ export default class GameScene extends Phaser.Scene {
 
   pickFloor(x, y) {
     const n = (x * 17 + y * 31) % 10;
-    if (n === 0) return TILE.FLOOR_VAR;
-    if (n === 1) return TILE.FLOOR_PEBBLE;
-    // Main-room look near centers uses stone occasionally
+    if (n === 0 || n === 5) return TILE.FLOOR_VAR;
+    if (n === 1 || n === 6) return TILE.FLOOR_PEBBLE;
     if (n === 2) return TILE.FLOOR_STONE;
+    if (n === 3) return TILE.FLOOR_ALT;
     return TILE.FLOOR;
   }
 
@@ -146,10 +140,14 @@ export default class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Pick Kenney wall frame from orthogonal (+ diagonal) floor neighbors.
-   * Matches sampleMap.tmx: N=40, S=26, W=13, E=15, corners 4/5/25/27.
+   * Kenney Tiny Dungeon wall autotile (Sample.png / sampleMap.tmx).
+   * - Continuous brown wall-tops fill all non-floor cells
+   * - Grey brick FACE only when floor is immediately south
+   * - South lip when floor is north; side rims when floor is east/west
+   * - Never rotate brick faces for left/right walls
    */
   pickWall(x, y, grid) {
+    // Kenney sampleMap.tmx / Sample.png autotile
     const n = this.isWalkableCell(grid, x, y - 1);
     const e = this.isWalkableCell(grid, x + 1, y);
     const s = this.isWalkableCell(grid, x, y + 1);
@@ -158,47 +156,53 @@ export default class GameScene extends Phaser.Scene {
     const sw = this.isWalkableCell(grid, x - 1, y + 1);
     const ne = this.isWalkableCell(grid, x + 1, y - 1);
     const nw = this.isWalkableCell(grid, x - 1, y - 1);
-    const ortho = (n ? 1 : 0) + (e ? 1 : 0) + (s ? 1 : 0) + (w ? 1 : 0);
 
-    // Straight edges (exactly one orthogonal floor neighbor)
-    if (ortho === 1) {
-      if (s) {
-        const r = (x + y) % 7;
-        if (r === 0) return TILE.WALL_WINDOW;
-        if (r === 1) return TILE.WALL_DECOR;
-        return TILE.WALL;
-      }
-      if (n) return TILE.WALL_SOUTH;
-      if (e) return TILE.WALL_WEST;
-      if (w) return TILE.WALL_EAST;
-    }
-
-    // Two orthogonal floors — concave / junction corners
-    if (s && e && !n && !w) return TILE.WALL_CORNER_NW;
-    if (s && w && !n && !e) return TILE.WALL_CORNER_NE;
-    if (n && e && !s && !w) return TILE.WALL_CORNER_SW;
-    if (n && w && !s && !e) return TILE.WALL_CORNER_SE;
-
-    // Prefer a facing edge when multiple floors touch (corridors / junctions)
+    // Brick face (floor south) — Sample.png wall fronts
     if (s) {
-      const r = (x + y) % 7;
-      if (r === 0) return TILE.WALL_WINDOW;
-      if (r === 1) return TILE.WALL_DECOR;
-      return TILE.WALL;
+      if (w && !e) return TILE.WALL_FACE_SW; // 57
+      if (e && !w) return TILE.WALL_FACE_SE; // 59
+      const r = (x * 3 + y * 5) % 9;
+      if (r === 0) return TILE.WALL_FACE_WINDOW;
+      if (r === 1) return TILE.WALL_FACE_BANNER;
+      return TILE.WALL_FACE; // 40
     }
+
+    // South lip: floor directly north → 26; under side columns (NE/NW) → 25/27
     if (n) return TILE.WALL_SOUTH;
-    if (e) return TILE.WALL_WEST;
-    if (w) return TILE.WALL_EAST;
-
-    // Outer corners of thin walls: only diagonal floor into the room
-    if (ortho === 0) {
-      if (se && !sw && !ne && !nw) return TILE.WALL_CORNER_NW;
-      if (sw && !se && !nw && !ne) return TILE.WALL_CORNER_NE;
-      if (ne && !nw && !se && !sw) return TILE.WALL_CORNER_SW;
-      if (nw && !ne && !sw && !se) return TILE.WALL_CORNER_SE;
+    if ((ne || nw) && !s && !e && !w) {
+      if (ne && !nw) return TILE.WALL_SOUTH_SW; // 25
+      if (nw && !ne) return TILE.WALL_SOUTH_SE; // 27
+      return TILE.WALL_SOUTH;
     }
 
-    return (x + y) % 5 === 0 ? TILE.WALL_FILL_VAR : TILE.WALL_FILL;
+    // Side walls (floor east/west) — sampleMap tiles 13/15
+    // Against brown fill (0) these read as full wall tops + rim, not thin strips on black
+    if (e && !w) return TILE.WALL_WEST; // 13
+    if (w && !e) return TILE.WALL_EAST; // 15
+
+    // Face-row outer corners (sampleMap: 13/15 at ends of a 40-row)
+    // Floor only diagonally SE / SW into the room
+    if (se && !s && !e && !sw && !n && !w) return TILE.WALL_WEST; // 13
+    if (sw && !s && !w && !se && !n && !e) return TILE.WALL_EAST; // 15
+
+    // Wall-top strip (sampleMap 1/2/3) directly above brick faces / face-corners
+    const s2 = this.isWalkableCell(grid, x, y + 2);
+    const southNonFloor =
+      y + 1 < grid.length &&
+      grid[y + 1][x] !== CELL.FLOOR &&
+      grid[y + 1][x] !== CELL.STAIRS;
+    if (southNonFloor) {
+      // Directly above a brick face sitting on floor → always middle top (2)
+      if (s2) return TILE.WALL_TOP;
+      // Above NW face-corner (13): floor only to the SE at y+2
+      const s2e = this.isWalkableCell(grid, x + 1, y + 2);
+      const s2w = this.isWalkableCell(grid, x - 1, y + 2);
+      if (s2e && !s2w) return TILE.WALL_TOP_W; // 1
+      if (s2w && !s2e) return TILE.WALL_TOP_E; // 3
+    }
+
+    // Continuous brown wall mass (Sample.png)
+    return TILE.WALL_FILL;
   }
 
   occupied(tx, ty) {
