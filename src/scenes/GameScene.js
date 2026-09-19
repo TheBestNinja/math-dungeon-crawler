@@ -226,19 +226,39 @@ export default class GameScene extends Phaser.Scene {
         this.isWalkableCell(grid, x + 1, y + 1);
       if (westIsFace && !eastIsFace) return TILE.WALL_EAST_ALT; // 16
       if (eastIsFace && !westIsFace) return TILE.WALL_WEST_ALT; // 17
-      // Cap top lip before/after a corridor mouth (side rim 16/17 next door)
+      // Cap top lip before/after a corridor mouth ONLY when the adjacent
+      // side-rim cell is NOT itself top-latitude (would be blend 16/17).
+      // sampleMap uses 16|2|2… / …2|2|17 — never 16|1 or 3|17.
+      // Keep 15|1|2 / 2|3|13 for stepped plain-rim joins.
       if (
         !this.isWalkableCell(grid, x + 1, y) &&
         this.isWalkableCell(grid, x + 2, y)
       ) {
-        return TILE.WALL_TOP_E; // 3
+        const eastTopLat =
+          y + 1 < grid.length &&
+          grid[y + 1][x + 1] === CELL.WALL &&
+          this.isWalkableCell(grid, x + 1, y + 2);
+        if (!eastTopLat) return TILE.WALL_TOP_E; // 3 after plain 13/15
       }
       if (
         !this.isWalkableCell(grid, x - 1, y) &&
         this.isWalkableCell(grid, x - 2, y)
       ) {
-        return TILE.WALL_TOP_W; // 1
+        const westTopLat =
+          y + 1 < grid.length &&
+          grid[y + 1][x - 1] === CELL.WALL &&
+          this.isWalkableCell(grid, x - 1, y + 2);
+        if (!westTopLat) return TILE.WALL_TOP_W; // 1 after plain 13/15
       }
+      // True strip ends against void/empty (sampleMap 1|2|…|3)
+      const westVoid =
+        x === 0 ||
+        (grid[y][x - 1] !== CELL.WALL && !this.isWalkableCell(grid, x - 1, y));
+      const eastVoid =
+        x + 1 >= grid[0].length ||
+        (grid[y][x + 1] !== CELL.WALL && !this.isWalkableCell(grid, x + 1, y));
+      if (westVoid && !eastVoid) return TILE.WALL_TOP_W; // 1
+      if (eastVoid && !westVoid) return TILE.WALL_TOP_E; // 3
       return TILE.WALL_TOP; // 2
     }
     if (southIsWall && !s2) {
