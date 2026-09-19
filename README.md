@@ -18,8 +18,21 @@ A playable browser dungeon crawler built with **Phaser 3** and a **TinyKeep-styl
 | Reach the dark pit (stairs) | Next floor |
 | **R** | Regenerate current floor (or restart after death) |
 | **E** | Open the wall auto-tile editor |
+| **Esc** | Return to login / character screen |
 
 Or click **Auto-tile editor** (top-right on the game page).
+
+
+## Login & character creator
+
+On load you get a **login screen** (local profile only — no server).
+
+1. Enter a **display name**.
+2. **Create character** — layer Kenney Roguelike Characters parts (body, pants, armor, hair, facial hair, headgear, weapon, shield) with a live preview.
+3. **Save**, then **Play** to enter the dungeon as that hero.
+4. Profile is stored in `localStorage` (`mdc-character-v1`). **Esc** in-game returns to login.
+
+Assets: `public/assets/chars/roguelikeChar_transparent.png` (16×16, 1px spacing). Credit **Kenney** — [Roguelike Characters](https://kenney.nl/assets/roguelike-characters) (CC0).
 
 ## Goal
 
@@ -140,6 +153,7 @@ Each run and each new floor gets a fresh layout.
 
 ## Credits
 
+- **Kenney** — [Roguelike Characters](https://kenney.nl/assets/roguelike-characters) (character creator, CC0)
 - **Kenney** — [Tiny Dungeon](https://kenney.nl/assets/tiny-dungeon) tiles & characters ([www.kenney.nl](https://www.kenney.nl)), license **CC0 1.0**
 - Dungeon algorithm inspired by TinyKeep / Adonaac’s GameDeveloper write-up
 

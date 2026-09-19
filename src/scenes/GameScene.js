@@ -3,6 +3,10 @@ import { generateDungeon, CELL } from '../dungeon/generate.js';
 import { TILE, TILE_SIZE } from '../tiles.js';
 import { pickWall as pickWallFrame } from '../autotile/pickWall.js';
 import { createDefaultConfig } from '../autotile/defaults.js';
+import { createCharacterSprite } from '../character/sprite.js';
+import { loadProfile } from '../character/profile.js';
+import { defaultAppearance } from '../character/layers.js';
+import { CHAR_SHEET } from '../character/layers.js';
 
 const SCALE = 3;
 const PLAYER_MAX_HP = 10;
@@ -23,11 +27,24 @@ export default class GameScene extends Phaser.Scene {
       frameWidth: 16,
       frameHeight: 16,
     });
+    if (!this.textures.exists('chars')) {
+      this.load.spritesheet(CHAR_SHEET.key, CHAR_SHEET.path, {
+        frameWidth: CHAR_SHEET.frameWidth,
+        frameHeight: CHAR_SHEET.frameHeight,
+        spacing: CHAR_SHEET.spacing,
+      });
+    }
   }
 
   create() {
     this.cameras.main.fadeIn(200, 0, 0, 0);
     this.autotile = this.registry.get('autotile') || createDefaultConfig();
+    this.profile =
+      this.registry.get('profile') || loadProfile() || {
+        name: 'Hero',
+        appearance: defaultAppearance(),
+      };
+    this.registry.set('profile', this.profile);
     this.moving = false;
     this.dead = false;
     this.wonFloor = false;
@@ -96,16 +113,17 @@ export default class GameScene extends Phaser.Scene {
 
     this.playerTx = start.x;
     this.playerTy = start.y;
-    this.player = this.add
-      .image(
-        start.x * TILE_SIZE * SCALE,
-        start.y * TILE_SIZE * SCALE,
-        'tiles',
-        TILE.PLAYER
-      )
-      .setOrigin(0)
-      .setScale(SCALE)
-      .setDepth(10);
+    if (this.textures.exists('chars')) {
+      this.textures.get('chars').setFilter(Phaser.Textures.FilterMode.NEAREST);
+    }
+    this.player = createCharacterSprite(
+      this,
+      start.x * TILE_SIZE * SCALE,
+      start.y * TILE_SIZE * SCALE,
+      this.profile.appearance || defaultAppearance(),
+      SCALE
+    );
+    this.player.setDepth(10);
 
     this.stairsPos = { x: stairs.x, y: stairs.y };
 
@@ -124,10 +142,14 @@ export default class GameScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-E', () => {
       window.location.href = new URL('autotile.html', window.location.href).href;
     });
+    this.input.keyboard.on('keydown-ESC', () => {
+      this.scene.start('LoginScene');
+    });
 
     this.events.on('shutdown', () => {
       this.input.keyboard.off('keydown-R');
       this.input.keyboard.off('keydown-E');
+      this.input.keyboard.off('keydown-ESC');
     });
   }
 
@@ -222,7 +244,7 @@ export default class GameScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(101);
     this.hintText = this.add
-      .text(8, cam.height - 28, 'WASD move · bump attack · stairs next floor · R regen · E auto-tile editor', {
+      .text(8, cam.height - 28, 'WASD move · bump attack · stairs · R regen · E editor · Esc login', {
         fontFamily: 'monospace',
         fontSize: '12px',
         color: '#a09080',
@@ -248,7 +270,7 @@ export default class GameScene extends Phaser.Scene {
 
   updateHud() {
     const hearts = '♥'.repeat(Math.max(0, this.playerHp)) + '♡'.repeat(Math.max(0, PLAYER_MAX_HP - this.playerHp));
-    this.hudText.setText(`Floor ${this.floorNum}   HP ${hearts} (${this.playerHp}/${PLAYER_MAX_HP})`);
+    this.hudText.setText(`${this.profile?.name || "Hero"} · Floor ${this.floorNum}   HP ${hearts} (${this.playerHp}/${PLAYER_MAX_HP})`);
   }
 
   showMessage(msg, ms = 1200) {
@@ -352,7 +374,7 @@ export default class GameScene extends Phaser.Scene {
     // Stairs
     if (this.playerTx === this.stairsPos.x && this.playerTy === this.stairsPos.y) {
       this.wonFloor = true;
-      this.showMessage(`Floor ${this.floorNum} cleared!\nDescending...`, 900);
+      this.showMessage(`${this.profile?.name || "Hero"} · Floor ${this.floorNum} cleared!\nDescending...`, 900);
       this.cameras.main.fadeOut(500, 0, 0, 0);
       this.cameras.main.once('camerafadeoutcomplete', () => {
         this.scene.restart({ floor: this.floorNum + 1 });
