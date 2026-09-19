@@ -188,9 +188,22 @@ export default class GameScene extends Phaser.Scene {
       return TILE.WALL_SOUTH; // 26
     }
 
-    // Side rims (floor east/west)
-    if (e && !w) return TILE.WALL_WEST; // 13
-    if (w && !e) return TILE.WALL_EAST; // 15
+    // Side rims (floor east/west). At top-strip latitude (wall south +
+    // floor two steps south) use 17/16 which blend vertical rim → top lip
+    // (sampleMap doorway / corridor-mouth joins).
+    if (e && !w) {
+      // Top-strip latitude only: wall immediately south is a FACE (floor at y+2)
+      const southIsWall = y + 1 < grid.length && grid[y + 1][x] === CELL.WALL;
+      const s2 = this.isWalkableCell(grid, x, y + 2);
+      if (southIsWall && s2) return TILE.WALL_WEST_ALT; // 17
+      return TILE.WALL_WEST; // 13
+    }
+    if (w && !e) {
+      const southIsWall = y + 1 < grid.length && grid[y + 1][x] === CELL.WALL;
+      const s2 = this.isWalkableCell(grid, x, y + 2);
+      if (southIsWall && s2) return TILE.WALL_EAST_ALT; // 16
+      return TILE.WALL_EAST; // 15
+    }
 
     // Face-row outer caps (only diagonal floor) — sampleMap 13/15 column
     if (se && !s && !e && !sw && !n && !w) return TILE.WALL_WEST; // 13
@@ -199,17 +212,36 @@ export default class GameScene extends Phaser.Scene {
     // South-lip outer diagonal leftovers → fill (25/27 already on lip ends)
     if ((ne || nw) && !e && !w) return TILE.WALL_FILL;
 
-    // Wall-top strip (1/2/3): sampleMap places 1 above 13, 2 above faces, 3 above 15
+    // Wall-top strip (1/2/3). sampleMap: 1 above west cap, 2 mid, 3 east.
+    // Stepped walls: when a same-row FACE sits west/east, use 16/17 joiners.
     const s2 = this.isWalkableCell(grid, x, y + 2);
     const southIsWall =
       y + 1 < grid.length && grid[y + 1][x] === CELL.WALL;
     if (southIsWall && s2) {
-      // Directly above a brick face on floor → middle top (2).
-      // West/east caps (1/3) sit above the 13/15 face-row outer cells.
-      return TILE.WALL_TOP;
+      const westIsFace =
+        !this.isWalkableCell(grid, x - 1, y) &&
+        this.isWalkableCell(grid, x - 1, y + 1);
+      const eastIsFace =
+        !this.isWalkableCell(grid, x + 1, y) &&
+        this.isWalkableCell(grid, x + 1, y + 1);
+      if (westIsFace && !eastIsFace) return TILE.WALL_EAST_ALT; // 16
+      if (eastIsFace && !westIsFace) return TILE.WALL_WEST_ALT; // 17
+      // Cap top lip before/after a corridor mouth (side rim 16/17 next door)
+      if (
+        !this.isWalkableCell(grid, x + 1, y) &&
+        this.isWalkableCell(grid, x + 2, y)
+      ) {
+        return TILE.WALL_TOP_E; // 3
+      }
+      if (
+        !this.isWalkableCell(grid, x - 1, y) &&
+        this.isWalkableCell(grid, x - 2, y)
+      ) {
+        return TILE.WALL_TOP_W; // 1
+      }
+      return TILE.WALL_TOP; // 2
     }
     if (southIsWall && !s2) {
-      // Above face-row outer 13/15 caps
       const s2e = this.isWalkableCell(grid, x + 1, y + 2);
       const s2w = this.isWalkableCell(grid, x - 1, y + 2);
       if (s2e && !s2w) return TILE.WALL_TOP_W; // 1
