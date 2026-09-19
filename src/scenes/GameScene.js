@@ -4,12 +4,13 @@ import { TILE, TILE_SIZE } from '../tiles.js';
 import { pickWall as pickWallFrame } from '../autotile/pickWall.js';
 import { createDefaultConfig } from '../autotile/defaults.js';
 import { createCharacterSprite } from '../character/sprite.js';
-import { loadProfile } from '../character/profile.js';
+import { loadProfile, persistStats } from '../character/profile.js';
 import { defaultAppearance } from '../character/layers.js';
 import { CHAR_SHEET } from '../character/layers.js';
+import { DEFAULT_STATS, normalizeStats } from '../character/stats.js';
+import GameHud from '../ui/GameHud.js';
 
 const SCALE = 3;
-const PLAYER_MAX_HP = 10;
 const BAT = { frame: TILE.ENEMY_BAT, hp: 2, dmg: 1, name: 'Bat' };
 const SPIDER = { frame: TILE.ENEMY_SPIDER, hp: 3, dmg: 2, name: 'Spider' };
 
@@ -34,6 +35,13 @@ export default class GameScene extends Phaser.Scene {
         spacing: CHAR_SHEET.spacing,
       });
     }
+    if (!this.textures.exists('ui')) {
+      this.load.atlasXML(
+        'ui',
+        'assets/ui/uipack_rpg_sheet.png',
+        'assets/ui/uipack_rpg_sheet.xml'
+      );
+    }
   }
 
   create() {
@@ -43,12 +51,19 @@ export default class GameScene extends Phaser.Scene {
       this.registry.get('profile') || loadProfile() || {
         name: 'Hero',
         appearance: defaultAppearance(),
+        stats: { ...DEFAULT_STATS },
       };
+    this.profile.stats = normalizeStats(this.profile.stats);
     this.registry.set('profile', this.profile);
     this.moving = false;
     this.dead = false;
     this.wonFloor = false;
-    this.playerHp = PLAYER_MAX_HP;
+    this.playerMaxHp = this.profile.stats.maxHp;
+    this.playerHp = this.playerMaxHp;
+    this.playerAttack = this.profile.stats.attack;
+    this.playerDefense = this.profile.stats.defense;
+    this.gold = this.profile.stats.gold;
+    this.potions = 0;
     this.enemies = [];
     this.pickups = [];
 
@@ -132,7 +147,7 @@ export default class GameScene extends Phaser.Scene {
     this.cameras.main.setZoom(1);
 
     this.cursors = this.input.keyboard.createCursorKeys();
-    this.keys = this.input.keyboard.addKeys('W,A,S,D,R');
+    this.keys = this.input.keyboard.addKeys('W,A,S,D,R,C,TAB');
 
     this.createHud();
     this.input.keyboard.on('keydown-R', () => {
@@ -143,13 +158,24 @@ export default class GameScene extends Phaser.Scene {
       window.location.href = new URL('autotile.html', window.location.href).href;
     });
     this.input.keyboard.on('keydown-ESC', () => {
+      if (this.hud?.statsOpen) {
+        this.hud.setStatsOpen(false);
+        return;
+      }
       this.scene.start('LoginScene');
+    });
+    this.input.keyboard.on('keydown-C', () => this.hud?.toggleStats());
+    this.input.keyboard.on('keydown-TAB', (ev) => {
+      ev.originalEvent?.preventDefault?.();
+      this.hud?.toggleStats();
     });
 
     this.events.on('shutdown', () => {
       this.input.keyboard.off('keydown-R');
       this.input.keyboard.off('keydown-E');
       this.input.keyboard.off('keydown-ESC');
+      this.input.keyboard.off('keydown-C');
+      this.input.keyboard.off('keydown-TAB');
     });
   }
 
@@ -229,59 +255,51 @@ export default class GameScene extends Phaser.Scene {
   }
 
   createHud() {
-    const cam = this.cameras.main;
-    this.hudBg = this.add
-      .rectangle(0, 0, cam.width, 40, 0x000000, 0.65)
-      .setOrigin(0)
-      .setScrollFactor(0)
-      .setDepth(100);
-    this.hudText = this.add
-      .text(8, 8, '', {
-        fontFamily: 'monospace',
-        fontSize: '14px',
-        color: '#f0e6d2',
-      })
-      .setScrollFactor(0)
-      .setDepth(101);
-    this.hintText = this.add
-      .text(8, cam.height - 28, 'WASD move · bump attack · stairs · R regen · E editor · Esc login', {
-        fontFamily: 'monospace',
-        fontSize: '12px',
-        color: '#a09080',
-      })
-      .setScrollFactor(0)
-      .setDepth(101);
-    this.messageText = this.add
-      .text(cam.width / 2, cam.height / 2, '', {
-        fontFamily: 'monospace',
-        fontSize: '22px',
-        color: '#ffe080',
-        align: 'center',
-        backgroundColor: '#000000aa',
-        padding: { x: 16, y: 12 },
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(102)
-      .setVisible(false);
-
+    if (this.textures.exists('ui')) {
+      this.textures.get('ui').setFilter(Phaser.Textures.FilterMode.NEAREST);
+    }
+    this.hud = new GameHud(this, () => this.getHudState());
+    this.hud.create();
     this.updateHud();
   }
 
+  getHudState() {
+    return {
+      name: this.profile?.name || 'Hero',
+      appearance: this.profile?.appearance || defaultAppearance(),
+      hp: this.playerHp,
+      maxHp: this.playerMaxHp,
+      attack: this.playerAttack,
+      defense: this.playerDefense,
+      floor: this.floorNum,
+      gold: this.gold,
+      potions: this.potions,
+    };
+  }
+
   updateHud() {
-    const hearts = '♥'.repeat(Math.max(0, this.playerHp)) + '♡'.repeat(Math.max(0, PLAYER_MAX_HP - this.playerHp));
-    this.hudText.setText(`${this.profile?.name || "Hero"} · Floor ${this.floorNum}   HP ${hearts} (${this.playerHp}/${PLAYER_MAX_HP})`);
+    this.hud?.refresh();
   }
 
   showMessage(msg, ms = 1200) {
-    this.messageText.setText(msg).setVisible(true);
-    this.time.delayedCall(ms, () => {
-      if (!this.dead) this.messageText.setVisible(false);
+    this.hud?.showMessage(msg, ms);
+  }
+
+  saveRuntimeStats() {
+    const stats = normalizeStats({
+      maxHp: this.playerMaxHp,
+      attack: this.playerAttack,
+      defense: this.playerDefense,
+      gold: this.gold,
     });
+    this.profile.stats = stats;
+    persistStats(stats);
+    this.registry.set('profile', this.profile);
   }
 
   update() {
     if (this.dead || this.wonFloor || this.moving) return;
+    if (this.hud?.statsOpen) return;
 
     let dx = 0;
     let dy = 0;
@@ -331,7 +349,9 @@ export default class GameScene extends Phaser.Scene {
 
   attackEnemy(enemy) {
     this.moving = true;
-    enemy.hp -= 1;
+    const dmg = this.playerAttack;
+    enemy.hp -= dmg;
+    this.showMessage(enemy.hp <= 0 ? `Defeated ${enemy.name}!` : `Hit ${enemy.name} for ${dmg}`, 500);
     this.tweens.add({
       targets: enemy.spr,
       alpha: 0.3,
@@ -340,7 +360,6 @@ export default class GameScene extends Phaser.Scene {
       onComplete: () => {
         if (enemy.hp <= 0) {
           enemy.spr.destroy();
-          this.showMessage(`Defeated ${enemy.name}!`, 700);
         }
         // Enemy counter-attacks if alive and adjacent after
         this.enemyTurns();
@@ -357,15 +376,19 @@ export default class GameScene extends Phaser.Scene {
         p.taken = true;
         if (p.type === 'potion') {
           const heal = 3;
-          this.playerHp = Math.min(PLAYER_MAX_HP, this.playerHp + heal);
-          this.showMessage(`+${heal} HP`);
+          this.playerHp = Math.min(this.playerMaxHp, this.playerHp + heal);
+          this.potions += 1;
+          this.showMessage(`Potion! +${heal} HP`);
           this.updateHud();
           p.spr.destroy();
         } else if (p.type === 'chest') {
           p.spr.setTexture('tiles', TILE.CHEST_OPEN);
           const heal = 2;
-          this.playerHp = Math.min(PLAYER_MAX_HP, this.playerHp + heal);
-          this.showMessage('Chest! +2 HP');
+          const loot = 5;
+          this.playerHp = Math.min(this.playerMaxHp, this.playerHp + heal);
+          this.gold += loot;
+          this.saveRuntimeStats();
+          this.showMessage(`Chest! +${heal} HP, +${loot} gold`);
           this.updateHud();
         }
       }
@@ -393,10 +416,11 @@ export default class GameScene extends Phaser.Scene {
       const dist = Math.abs(e.tx - this.playerTx) + Math.abs(e.ty - this.playerTy);
       if (dist === 1) {
         // Attack player
-        this.playerHp -= e.dmg;
+        const taken = Math.max(1, e.dmg - this.playerDefense);
+        this.playerHp -= taken;
         this.updateHud();
         this.cameras.main.shake(80, 0.008);
-        this.showMessage(`${e.name} hits for ${e.dmg}!`, 600);
+        this.showMessage(`${e.name} hits for ${taken}!`, 600);
         if (this.playerHp <= 0) {
           this.playerHp = 0;
           this.updateHud();
@@ -438,10 +462,14 @@ export default class GameScene extends Phaser.Scene {
 
   playerDie() {
     this.dead = true;
-    this.messageText
-      .setText(`You died on floor ${this.floorNum}.\nPress R to restart`)
-      .setVisible(true);
-    this.player.setTint(0x882222);
+    if (this.hud?.messageText) {
+      this.hud.messageText
+        .setText(`You died on floor ${this.floorNum}.\nPress R to restart`)
+        .setVisible(true);
+    }
+    if (this.player?.list) {
+      this.player.list.forEach((c) => c.setTint?.(0x882222));
+    }
     this.input.keyboard.once('keydown-R', () => {
       this.scene.restart({ floor: 1 });
     });

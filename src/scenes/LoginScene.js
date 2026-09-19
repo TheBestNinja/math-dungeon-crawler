@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { loadProfile, saveProfile, hasPlayableProfile } from '../character/profile.js';
+import { DEFAULT_STATS } from '../character/stats.js';
 import { CHAR_SHEET } from '../character/layers.js';
 import { createCharacterSprite } from '../character/sprite.js';
 import { defaultAppearance } from '../character/layers.js';
@@ -158,6 +159,7 @@ export default class LoginScene extends Phaser.Scene {
     saveProfile({
       name: n,
       appearance: prev?.appearance || defaultAppearance(),
+      stats: prev?.stats || DEFAULT_STATS,
     });
     this.profile = loadProfile();
   }

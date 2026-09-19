@@ -18,10 +18,19 @@ A playable browser dungeon crawler built with **Phaser 3** and a **TinyKeep-styl
 | Reach the dark pit (stairs) | Next floor |
 | **R** | Regenerate current floor (or restart after death) |
 | **E** | Open the wall auto-tile editor |
-| **Esc** | Return to login / character screen |
+| **C** / **Tab** | Toggle Stats tab |
+| **Esc** | Close Stats, or return to login |
 
 Or click **Auto-tile editor** (top-right on the game page).
 
+
+## In-game UI & Stats
+
+Kenney **UI pack: RPG extension** (CC0) drives the dungeon HUD (beige panel + red HP bar) and a **Stats** tab.
+
+- Open/close: **C**, **Tab**, or the square **C** button (top-right)
+- Shows: name, character portrait, HP, attack, defense, floor, gold, potions used
+- Assets: `public/assets/ui/uipack_rpg_sheet.png`
 
 ## Login & character creator
 

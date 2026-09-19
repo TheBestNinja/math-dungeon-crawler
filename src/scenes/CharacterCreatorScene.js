@@ -6,6 +6,7 @@ import {
   defaultAppearance,
 } from '../character/layers.js';
 import { loadProfile, saveProfile } from '../character/profile.js';
+import { DEFAULT_STATS } from '../character/stats.js';
 import { createCharacterSprite } from '../character/sprite.js';
 
 export default class CharacterCreatorScene extends Phaser.Scene {
@@ -179,7 +180,11 @@ export default class CharacterCreatorScene extends Phaser.Scene {
 
   saveAndReturn() {
     const name = (this.nameValue || '').trim() || 'Hero';
-    const profile = saveProfile({ name, appearance: this.appearance });
+    const profile = saveProfile({
+      name,
+      appearance: this.appearance,
+      stats: loadProfile()?.stats || DEFAULT_STATS,
+    });
     this.registry.set('profile', profile);
     this.cameras.main.fadeOut(150, 0, 0, 0);
     this.cameras.main.once('camerafadeoutcomplete', () => {
