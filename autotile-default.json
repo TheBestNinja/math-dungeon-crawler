@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "tileset": {
+    "image": "assets/tilemap_packed.png",
+    "tileSize": 16,
+    "spacing": 0,
+    "columns": 12,
+    "rows": 11
+  },
+  "rules": {
+    "wall_fill": 0,
+    "wall_face": 40,
+    "wall_face_window": 28,
+    "wall_face_banner": 29,
+    "wall_face_sw": 57,
+    "wall_face_se": 59,
+    "wall_south": 26,
+    "wall_south_sw": 25,
+    "wall_south_se": 27,
+    "wall_south_inner_w": 4,
+    "wall_south_inner_e": 5,
+    "wall_west": 13,
+    "wall_east": 15,
+    "wall_west_alt": 17,
+    "wall_east_alt": 16,
+    "wall_top": 2,
+    "wall_top_w": 1,
+    "wall_top_e": 3,
+    "floor": 48
+  }
+}

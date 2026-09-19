@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Auto-tile editor — Math Dungeon Crawler</title>
+    <script type="module" crossorigin src="/math-dungeon-crawler/assets/autotile-4BSEjnk7.js"></script>
+    <link rel="modulepreload" crossorigin href="/math-dungeon-crawler/assets/config-BR9x4ZFh.js">
+    <link rel="stylesheet" crossorigin href="/math-dungeon-crawler/assets/autotile-2RYuZyhi.css">
+  </head>
+  <body>
+    <header class="bar">
+      <div class="bar-left">
+        <a class="back" href="./">← Game</a>
+        <h1>Wall auto-tile editor</h1>
+      </div>
+      <div class="bar-actions">
+        <button type="button" id="btn-reset" title="Restore Kenney defaults">Reset defaults</button>
+        <button type="button" id="btn-import">Import JSON…</button>
+        <button type="button" id="btn-export" class="primary">Export JSON</button>
+        <button type="button" id="btn-apply" class="accent" title="Save to localStorage for the game">
+          Apply to game
+        </button>
+        <input type="file" id="file-import" accept="application/json,.json" hidden />
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel slots-panel">
+        <h2>Rule slots</h2>
+        <p class="hint">Select a slot, then click a tile in the palette.</p>
+        <div id="slot-list" class="slot-list"></div>
+      </section>
+
+      <section class="panel palette-panel">
+        <h2>Tileset palette <span id="palette-meta"></span></h2>
+        <div class="palette-wrap">
+          <canvas id="palette" width="384" height="352"></canvas>
+        </div>
+        <p class="hint" id="hover-info">Hover a tile for frame id</p>
+      </section>
+
+      <section class="panel preview-panel">
+        <h2>Live preview</h2>
+        <canvas id="preview" width="384" height="320"></canvas>
+        <p class="hint">Sample corridor + room; re-renders when rules change.</p>
+        <div class="status" id="status"></div>
+        <details class="schema-help">
+          <summary>JSON schema</summary>
+          <pre id="schema-sample"></pre>
+        </details>
+      </section>
+    </main>
+
+  </body>
+</html>
