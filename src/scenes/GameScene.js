@@ -143,13 +143,15 @@ export default class GameScene extends Phaser.Scene {
 
   /**
    * Kenney Tiny Dungeon wall autotile (Sample.png / sampleMap.tmx).
-   * - Continuous brown wall-tops fill all non-floor cells
-   * - Grey brick FACE only when floor is immediately south
-   * - South lip when floor is north; side rims when floor is east/west
-   * - Never rotate brick faces for left/right walls
+   * - Brick FACE (40) when floor south; ends/corners use 57/59 (face+rim)
+   * - Face-row outer caps 13/15; top strip 1/2/3; south lip 26 with 4/5/25/27
+   * - Side rims 13/15; deep mass tile 0. Never rotate brick faces.
    */
   pickWall(x, y, grid) {
-    // Kenney sampleMap.tmx / Sample.png autotile
+    // Kenney sampleMap.tmx / Sample.png autotile with dedicated corners.
+    // Face ends use 57/59 (brick + rim). Outer face-row caps use 13/15
+    // so the side-rim column stays continuous (sampleMap 13|40 pattern,
+    // with 57/59 instead of bare 40 at the ends).
     const n = this.isWalkableCell(grid, x, y - 1);
     const e = this.isWalkableCell(grid, x + 1, y);
     const s = this.isWalkableCell(grid, x, y + 1);
@@ -159,54 +161,61 @@ export default class GameScene extends Phaser.Scene {
     const ne = this.isWalkableCell(grid, x + 1, y - 1);
     const nw = this.isWalkableCell(grid, x - 1, y - 1);
 
-    // Brick face (floor south) — Sample.png wall fronts
+    // Brick face (floor south)
     if (s) {
+      // Inner corners: floor wraps S+W / S+E
       if (w && !e) return TILE.WALL_FACE_SW; // 57
       if (e && !w) return TILE.WALL_FACE_SE; // 59
+      // Outer ends of a face run (neighbors are walls): SE-only ⇒ west end
+      if (!w && !e) {
+        if (se && !sw) return TILE.WALL_FACE_SW; // 57
+        if (sw && !se) return TILE.WALL_FACE_SE; // 59
+      }
       const r = (x * 3 + y * 5) % 9;
       if (r === 0) return TILE.WALL_FACE_WINDOW;
       if (r === 1) return TILE.WALL_FACE_BANNER;
       return TILE.WALL_FACE; // 40
     }
 
-    // South lip: floor directly north → 26; under side columns (NE/NW) → 25/27
-    if (n) return TILE.WALL_SOUTH;
-    if ((ne || nw) && !s && !e && !w) {
-      if (ne && !nw) return TILE.WALL_SOUTH_SW; // 25
-      if (nw && !ne) return TILE.WALL_SOUTH_SE; // 27
-      return TILE.WALL_SOUTH;
+    // South lip (floor north): 4/5 inner, 25/27 outer ends, 26 mid
+    if (n) {
+      if (w && !e) return TILE.WALL_SOUTH_INNER_W; // 4
+      if (e && !w) return TILE.WALL_SOUTH_INNER_E; // 5
+      if (!w && !e) {
+        if (ne && !nw) return TILE.WALL_SOUTH_SW; // 25
+        if (nw && !ne) return TILE.WALL_SOUTH_SE; // 27
+      }
+      return TILE.WALL_SOUTH; // 26
     }
 
-    // Side walls (floor east/west) — sampleMap tiles 13/15
-    // With ≥2-thick WALL shell, brown fill sits behind these rims before void.
+    // Side rims (floor east/west)
     if (e && !w) return TILE.WALL_WEST; // 13
     if (w && !e) return TILE.WALL_EAST; // 15
 
-    // Face-row outer corners (sampleMap: 13/15 at ends of a 40-row)
+    // Face-row outer caps (only diagonal floor) — sampleMap 13/15 column
     if (se && !s && !e && !sw && !n && !w) return TILE.WALL_WEST; // 13
     if (sw && !s && !w && !se && !n && !e) return TILE.WALL_EAST; // 15
 
-    // Wall-top strip (1/2/3) ONLY the single row directly above a brick face.
-    // Never stack tile 2 as deep mass — its lip zebra-stripes.
+    // South-lip outer diagonal leftovers → fill (25/27 already on lip ends)
+    if ((ne || nw) && !e && !w) return TILE.WALL_FILL;
+
+    // Wall-top strip (1/2/3): sampleMap places 1 above 13, 2 above faces, 3 above 15
     const s2 = this.isWalkableCell(grid, x, y + 2);
     const southIsWall =
       y + 1 < grid.length && grid[y + 1][x] === CELL.WALL;
     if (southIsWall && s2) {
-      const s2e = this.isWalkableCell(grid, x + 1, y + 2);
-      const s2w = this.isWalkableCell(grid, x - 1, y + 2);
-      if (!s2w && s2e) return TILE.WALL_TOP_W;
-      if (!s2e && s2w) return TILE.WALL_TOP_E;
+      // Directly above a brick face on floor → middle top (2).
+      // West/east caps (1/3) sit above the 13/15 face-row outer cells.
       return TILE.WALL_TOP;
     }
-    // Above face-row corners (13/15): floor diagonally at y+2
     if (southIsWall && !s2) {
+      // Above face-row outer 13/15 caps
       const s2e = this.isWalkableCell(grid, x + 1, y + 2);
       const s2w = this.isWalkableCell(grid, x - 1, y + 2);
-      if (s2e && !s2w) return TILE.WALL_TOP_W;
-      if (s2w && !s2e) return TILE.WALL_TOP_E;
+      if (s2e && !s2w) return TILE.WALL_TOP_W; // 1
+      if (s2w && !s2e) return TILE.WALL_TOP_E; // 3
     }
 
-    // Deep wall mass / outer shell vs void: solid brown fill (tile 0)
     return TILE.WALL_FILL;
   }
 

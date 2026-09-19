@@ -28,8 +28,10 @@ export const TILE = {
   WALL_WEST_ALT: 17,
   WALL_EAST_ALT: 16,
 
-  // Misc corners from sample
-  WALL_INNER: 4,
+  // South-lip inner corners (sampleMap: 4/5 beside 26 when floor N+W / N+E)
+  WALL_SOUTH_INNER_W: 4, // floor north + west
+  WALL_SOUTH_INNER_E: 5, // floor north + east
+  WALL_INNER: 4, // alias
 
   FLOOR: 48,
   FLOOR_VAR: 49,
