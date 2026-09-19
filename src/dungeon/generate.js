@@ -63,7 +63,7 @@ function separateRooms(rooms, tile) {
       for (let j = i + 1; j < rooms.length; j++) {
         const a = rooms[i];
         const b = rooms[j];
-        if (!roomsOverlap(a, b, 1)) continue;
+        if (!roomsOverlap(a, b, 3)) continue;
         const acx = a.x + a.w / 2;
         const acy = a.y + a.h / 2;
         const bcx = b.x + b.w / 2;
@@ -183,7 +183,7 @@ export function generateDungeon(opts = {}) {
   const mainScale = opts.mainScale ?? 1.25;
   const loopChance = opts.loopChance ?? 0.12; // ~8–15%
   const corridorHalf = opts.corridorHalf ?? 1; // width 3
-  const padding = opts.padding ?? 4;
+  const padding = opts.padding ?? 8;
 
   // 1. Generate rooms
   const rooms = [];
@@ -325,29 +325,86 @@ export function generateDungeon(opts = {}) {
     );
   }
 
-  // Walls: any empty cell orthogonally adjacent to floor
+  // Walls: shell ≥2 tiles thick between floor and void.
+  // Pass 1 — EMPTY touching floor/stairs (8-neighbor) → WALL.
+  // Pass 2+ — dilate into EMPTY (wallThickness-1 times) so no wall
+  //           that touches floor is also adjacent to void.
+  const wallThickness = opts.wallThickness ?? 3;
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       if (grid[y][x] !== CELL.EMPTY) continue;
       let near = false;
       for (const [dx, dy] of [
-        [1, 0],
-        [-1, 0],
-        [0, 1],
-        [0, -1],
-        [1, 1],
-        [1, -1],
-        [-1, 1],
-        [-1, -1],
+        [1, 0], [-1, 0], [0, 1], [0, -1],
+        [1, 1], [1, -1], [-1, 1], [-1, -1],
       ]) {
         const nx = x + dx;
         const ny = y + dy;
-        if (ny >= 0 && ny < height && nx >= 0 && nx < width && grid[ny][nx] === CELL.FLOOR) {
+        if (
+          ny >= 0 &&
+          ny < height &&
+          nx >= 0 &&
+          nx < width &&
+          (grid[ny][nx] === CELL.FLOOR || grid[ny][nx] === CELL.STAIRS)
+        ) {
           near = true;
           break;
         }
       }
       if (near) grid[y][x] = CELL.WALL;
+    }
+  }
+  // Extra dilation passes (thickness-1): EMPTY touching WALL → WALL
+  for (let pass = 1; pass < wallThickness; pass++) {
+    const toWall = [];
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (grid[y][x] !== CELL.EMPTY) continue;
+        let touch = false;
+        // 8-neighbor dilation so outer corners stay solid (no diagonal holes)
+        for (const [dx, dy] of [
+          [1, 0], [-1, 0], [0, 1], [0, -1],
+          [1, 1], [1, -1], [-1, 1], [-1, -1],
+        ]) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (ny >= 0 && ny < height && nx >= 0 && nx < width && grid[ny][nx] === CELL.WALL) {
+            touch = true;
+            break;
+          }
+        }
+        if (touch) toWall.push([x, y]);
+      }
+    }
+    for (const [x, y] of toWall) grid[y][x] = CELL.WALL;
+  }
+
+  // Close residual EMPTY pockets enclosed by WALL (iterate to stability)
+  {
+    let changed = true;
+    while (changed) {
+      changed = false;
+      const fill = [];
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          if (grid[y][x] !== CELL.EMPTY) continue;
+          let walls = 0;
+          for (const [dx, dy] of [
+            [1, 0], [-1, 0], [0, 1], [0, -1],
+            [1, 1], [1, -1], [-1, 1], [-1, -1],
+          ]) {
+            const nx = x + dx, ny = y + dy;
+            if (ny < 0 || ny >= height || nx < 0 || nx >= width) continue;
+            if (grid[ny][nx] === CELL.WALL) walls++;
+          }
+          // ≥5 of 8 neighbors wall → pocket / diagonal notch
+          if (walls >= 5) fill.push([x, y]);
+        }
+      }
+      for (const [x, y] of fill) {
+        grid[y][x] = CELL.WALL;
+        changed = true;
+      }
     }
   }
 

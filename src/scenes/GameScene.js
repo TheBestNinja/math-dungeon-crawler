@@ -48,8 +48,8 @@ export default class GameScene extends Phaser.Scene {
       Array.from({ length: width }, () => false)
     );
 
-    // Sample.png style: every non-floor cell is wall mass (brown tops).
-    // Brick faces only on cells with floor to the south.
+    // WALL shell (≥2 thick) rendered as Kenney autotile; EMPTY stays void.
+    // Brick faces only on cells with floor immediately south.
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const cell = grid[y][x];
@@ -60,9 +60,11 @@ export default class GameScene extends Phaser.Scene {
         if (cell === CELL.FLOOR || cell === CELL.STAIRS) {
           frame = this.pickFloor(x, y);
           this.walkable[y][x] = true;
-        } else {
-          // WALL and VOID both render as wall terrain (continuous brown mass)
+        } else if (cell === CELL.WALL) {
+          // Only WALL cells — EMPTY stays void/black beyond the ≥2-thick shell
           frame = this.pickWall(x, y, grid);
+        } else {
+          continue; // void
         }
 
         const spr = this.add
@@ -176,32 +178,35 @@ export default class GameScene extends Phaser.Scene {
     }
 
     // Side walls (floor east/west) — sampleMap tiles 13/15
-    // Against brown fill (0) these read as full wall tops + rim, not thin strips on black
+    // With ≥2-thick WALL shell, brown fill sits behind these rims before void.
     if (e && !w) return TILE.WALL_WEST; // 13
     if (w && !e) return TILE.WALL_EAST; // 15
 
     // Face-row outer corners (sampleMap: 13/15 at ends of a 40-row)
-    // Floor only diagonally SE / SW into the room
     if (se && !s && !e && !sw && !n && !w) return TILE.WALL_WEST; // 13
     if (sw && !s && !w && !se && !n && !e) return TILE.WALL_EAST; // 15
 
-    // Wall-top strip (sampleMap 1/2/3) directly above brick faces / face-corners
+    // Wall-top strip (1/2/3) ONLY the single row directly above a brick face.
+    // Never stack tile 2 as deep mass — its lip zebra-stripes.
     const s2 = this.isWalkableCell(grid, x, y + 2);
-    const southNonFloor =
-      y + 1 < grid.length &&
-      grid[y + 1][x] !== CELL.FLOOR &&
-      grid[y + 1][x] !== CELL.STAIRS;
-    if (southNonFloor) {
-      // Directly above a brick face sitting on floor → always middle top (2)
-      if (s2) return TILE.WALL_TOP;
-      // Above NW face-corner (13): floor only to the SE at y+2
+    const southIsWall =
+      y + 1 < grid.length && grid[y + 1][x] === CELL.WALL;
+    if (southIsWall && s2) {
       const s2e = this.isWalkableCell(grid, x + 1, y + 2);
       const s2w = this.isWalkableCell(grid, x - 1, y + 2);
-      if (s2e && !s2w) return TILE.WALL_TOP_W; // 1
-      if (s2w && !s2e) return TILE.WALL_TOP_E; // 3
+      if (!s2w && s2e) return TILE.WALL_TOP_W;
+      if (!s2e && s2w) return TILE.WALL_TOP_E;
+      return TILE.WALL_TOP;
+    }
+    // Above face-row corners (13/15): floor diagonally at y+2
+    if (southIsWall && !s2) {
+      const s2e = this.isWalkableCell(grid, x + 1, y + 2);
+      const s2w = this.isWalkableCell(grid, x - 1, y + 2);
+      if (s2e && !s2w) return TILE.WALL_TOP_W;
+      if (s2w && !s2e) return TILE.WALL_TOP_E;
     }
 
-    // Continuous brown wall mass (Sample.png)
+    // Deep wall mass / outer shell vs void: solid brown fill (tile 0)
     return TILE.WALL_FILL;
   }
 
