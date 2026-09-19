@@ -62,3 +62,12 @@ Each run and each new floor gets a fresh layout.
 ## License
 
 Game code: MIT-style — free to use. Assets: CC0 (Kenney).
+
+## Deploy (GitHub Pages)
+
+```bash
+npm run build
+# publish dist/ to the gh-pages branch (already configured as the Pages source)
+```
+
+Live site: https://thebestninja.github.io/math-dungeon-crawler/
