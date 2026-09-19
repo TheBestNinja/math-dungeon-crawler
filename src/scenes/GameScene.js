@@ -65,7 +65,9 @@ export default class GameScene extends Phaser.Scene {
           frame = TILE.FLOOR_STONE;
           this.walkable[y][x] = true;
         } else {
-          frame = TILE.VOID;
+          // Leave void empty so the dark scene background reads behind
+          // brown wall-tops (tiles 13/15) instead of blending into tile 0.
+          continue;
         }
 
         const spr = this.add
@@ -135,20 +137,68 @@ export default class GameScene extends Phaser.Scene {
     return TILE.FLOOR;
   }
 
-  pickWall(x, y, grid) {
+  isWalkableCell(grid, x, y) {
     const h = grid.length;
     const w = grid[0].length;
-    const floorBelow =
-      y + 1 < h && (grid[y + 1][x] === CELL.FLOOR || grid[y + 1][x] === CELL.STAIRS);
-    if (floorBelow) {
-      // Front face of wall
-      const n = (x + y) % 7;
-      if (n === 0) return TILE.WALL_WINDOW;
-      if (n === 1) return TILE.WALL_DECOR;
+    if (y < 0 || y >= h || x < 0 || x >= w) return false;
+    const c = grid[y][x];
+    return c === CELL.FLOOR || c === CELL.STAIRS;
+  }
+
+  /**
+   * Pick Kenney wall frame from orthogonal (+ diagonal) floor neighbors.
+   * Matches sampleMap.tmx: N=40, S=26, W=13, E=15, corners 4/5/25/27.
+   */
+  pickWall(x, y, grid) {
+    const n = this.isWalkableCell(grid, x, y - 1);
+    const e = this.isWalkableCell(grid, x + 1, y);
+    const s = this.isWalkableCell(grid, x, y + 1);
+    const w = this.isWalkableCell(grid, x - 1, y);
+    const se = this.isWalkableCell(grid, x + 1, y + 1);
+    const sw = this.isWalkableCell(grid, x - 1, y + 1);
+    const ne = this.isWalkableCell(grid, x + 1, y - 1);
+    const nw = this.isWalkableCell(grid, x - 1, y - 1);
+    const ortho = (n ? 1 : 0) + (e ? 1 : 0) + (s ? 1 : 0) + (w ? 1 : 0);
+
+    // Straight edges (exactly one orthogonal floor neighbor)
+    if (ortho === 1) {
+      if (s) {
+        const r = (x + y) % 7;
+        if (r === 0) return TILE.WALL_WINDOW;
+        if (r === 1) return TILE.WALL_DECOR;
+        return TILE.WALL;
+      }
+      if (n) return TILE.WALL_SOUTH;
+      if (e) return TILE.WALL_WEST;
+      if (w) return TILE.WALL_EAST;
+    }
+
+    // Two orthogonal floors — concave / junction corners
+    if (s && e && !n && !w) return TILE.WALL_CORNER_NW;
+    if (s && w && !n && !e) return TILE.WALL_CORNER_NE;
+    if (n && e && !s && !w) return TILE.WALL_CORNER_SW;
+    if (n && w && !s && !e) return TILE.WALL_CORNER_SE;
+
+    // Prefer a facing edge when multiple floors touch (corridors / junctions)
+    if (s) {
+      const r = (x + y) % 7;
+      if (r === 0) return TILE.WALL_WINDOW;
+      if (r === 1) return TILE.WALL_DECOR;
       return TILE.WALL;
     }
-    // Top / filler wall
-    return TILE.WALL_TOP;
+    if (n) return TILE.WALL_SOUTH;
+    if (e) return TILE.WALL_WEST;
+    if (w) return TILE.WALL_EAST;
+
+    // Outer corners of thin walls: only diagonal floor into the room
+    if (ortho === 0) {
+      if (se && !sw && !ne && !nw) return TILE.WALL_CORNER_NW;
+      if (sw && !se && !nw && !ne) return TILE.WALL_CORNER_NE;
+      if (ne && !nw && !se && !sw) return TILE.WALL_CORNER_SW;
+      if (nw && !ne && !sw && !se) return TILE.WALL_CORNER_SE;
+    }
+
+    return (x + y) % 5 === 0 ? TILE.WALL_FILL_VAR : TILE.WALL_FILL;
   }
 
   occupied(tx, ty) {
