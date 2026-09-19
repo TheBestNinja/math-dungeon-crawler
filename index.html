@@ -13,10 +13,30 @@
         background: #0d0d12;
         overflow: hidden;
         display: flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
         font-family: system-ui, sans-serif;
+        color: #e8e0d4;
       }
+      .chrome {
+        position: fixed;
+        top: 8px;
+        right: 8px;
+        z-index: 20;
+        display: flex;
+        gap: 8px;
+      }
+      .chrome a {
+        background: #1e3a55;
+        color: #e8e0d4;
+        text-decoration: none;
+        font-size: 13px;
+        padding: 6px 10px;
+        border-radius: 6px;
+        border: 1px solid #6ea8cf;
+      }
+      .chrome a:hover { background: #2a4d6e; }
       #game-container {
         image-rendering: pixelated;
         image-rendering: crisp-edges;
@@ -28,6 +48,9 @@
     </style>
   </head>
   <body>
+    <nav class="chrome">
+      <a href="./autotile.html" title="Wall auto-tile editor (also press E)">Auto-tile editor</a>
+    </nav>
     <div id="game-container"></div>
     <script type="module" src="/src/main.js"></script>
   </body>

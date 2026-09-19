@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { generateDungeon, CELL } from '../dungeon/generate.js';
 import { TILE, TILE_SIZE } from '../tiles.js';
+import { pickWall as pickWallFrame } from '../autotile/pickWall.js';
+import { createDefaultConfig } from '../autotile/defaults.js';
 
 const SCALE = 3;
 const PLAYER_MAX_HP = 10;
@@ -25,6 +27,7 @@ export default class GameScene extends Phaser.Scene {
 
   create() {
     this.cameras.main.fadeIn(200, 0, 0, 0);
+    this.autotile = this.registry.get('autotile') || createDefaultConfig();
     this.moving = false;
     this.dead = false;
     this.wonFloor = false;
@@ -62,7 +65,7 @@ export default class GameScene extends Phaser.Scene {
           this.walkable[y][x] = true;
         } else if (cell === CELL.WALL) {
           // Only WALL cells — EMPTY stays void/black beyond the ≥2-thick shell
-          frame = this.pickWall(x, y, grid);
+          frame = pickWallFrame(x, y, grid, this.autotile.rules);
         } else {
           continue; // void
         }
@@ -118,9 +121,13 @@ export default class GameScene extends Phaser.Scene {
       if (this.dead || this.wonFloor) return;
       this.scene.restart({ floor: this.floorNum });
     });
+    this.input.keyboard.on('keydown-E', () => {
+      window.location.href = new URL('autotile.html', window.location.href).href;
+    });
 
     this.events.on('shutdown', () => {
       this.input.keyboard.off('keydown-R');
+      this.input.keyboard.off('keydown-E');
     });
   }
 
@@ -131,144 +138,6 @@ export default class GameScene extends Phaser.Scene {
     if (n === 2) return TILE.FLOOR_STONE;
     if (n === 3) return TILE.FLOOR_ALT;
     return TILE.FLOOR;
-  }
-
-  isWalkableCell(grid, x, y) {
-    const h = grid.length;
-    const w = grid[0].length;
-    if (y < 0 || y >= h || x < 0 || x >= w) return false;
-    const c = grid[y][x];
-    return c === CELL.FLOOR || c === CELL.STAIRS;
-  }
-
-  /**
-   * Kenney Tiny Dungeon wall autotile (Sample.png / sampleMap.tmx).
-   * - Brick FACE (40) when floor south; ends/corners use 57/59 (face+rim)
-   * - Face-row outer caps 13/15; top strip 1/2/3; south lip 26 with 4/5/25/27
-   * - Side rims 13/15; deep mass tile 0. Never rotate brick faces.
-   */
-  pickWall(x, y, grid) {
-    // Kenney sampleMap.tmx / Sample.png autotile with dedicated corners.
-    // Face ends use 57/59 (brick + rim). Outer face-row caps use 13/15
-    // so the side-rim column stays continuous (sampleMap 13|40 pattern,
-    // with 57/59 instead of bare 40 at the ends).
-    const n = this.isWalkableCell(grid, x, y - 1);
-    const e = this.isWalkableCell(grid, x + 1, y);
-    const s = this.isWalkableCell(grid, x, y + 1);
-    const w = this.isWalkableCell(grid, x - 1, y);
-    const se = this.isWalkableCell(grid, x + 1, y + 1);
-    const sw = this.isWalkableCell(grid, x - 1, y + 1);
-    const ne = this.isWalkableCell(grid, x + 1, y - 1);
-    const nw = this.isWalkableCell(grid, x - 1, y - 1);
-
-    // Brick face (floor south)
-    if (s) {
-      // Inner corners: floor wraps S+W / S+E
-      if (w && !e) return TILE.WALL_FACE_SW; // 57
-      if (e && !w) return TILE.WALL_FACE_SE; // 59
-      // Outer ends of a face run (neighbors are walls): SE-only ⇒ west end
-      if (!w && !e) {
-        if (se && !sw) return TILE.WALL_FACE_SW; // 57
-        if (sw && !se) return TILE.WALL_FACE_SE; // 59
-      }
-      const r = (x * 3 + y * 5) % 9;
-      if (r === 0) return TILE.WALL_FACE_WINDOW;
-      if (r === 1) return TILE.WALL_FACE_BANNER;
-      return TILE.WALL_FACE; // 40
-    }
-
-    // South lip (floor north): 4/5 inner, 25/27 outer ends, 26 mid
-    if (n) {
-      if (w && !e) return TILE.WALL_SOUTH_INNER_W; // 4
-      if (e && !w) return TILE.WALL_SOUTH_INNER_E; // 5
-      if (!w && !e) {
-        if (ne && !nw) return TILE.WALL_SOUTH_SW; // 25
-        if (nw && !ne) return TILE.WALL_SOUTH_SE; // 27
-      }
-      return TILE.WALL_SOUTH; // 26
-    }
-
-    // Side rims (floor east/west). At top-strip latitude (wall south +
-    // floor two steps south) use 17/16 which blend vertical rim → top lip
-    // (sampleMap doorway / corridor-mouth joins).
-    if (e && !w) {
-      // Top-strip latitude only: wall immediately south is a FACE (floor at y+2)
-      const southIsWall = y + 1 < grid.length && grid[y + 1][x] === CELL.WALL;
-      const s2 = this.isWalkableCell(grid, x, y + 2);
-      if (southIsWall && s2) return TILE.WALL_WEST_ALT; // 17
-      return TILE.WALL_WEST; // 13
-    }
-    if (w && !e) {
-      const southIsWall = y + 1 < grid.length && grid[y + 1][x] === CELL.WALL;
-      const s2 = this.isWalkableCell(grid, x, y + 2);
-      if (southIsWall && s2) return TILE.WALL_EAST_ALT; // 16
-      return TILE.WALL_EAST; // 15
-    }
-
-    // Face-row outer caps (only diagonal floor) — sampleMap 13/15 column
-    if (se && !s && !e && !sw && !n && !w) return TILE.WALL_WEST; // 13
-    if (sw && !s && !w && !se && !n && !e) return TILE.WALL_EAST; // 15
-
-    // South-lip outer diagonal leftovers → fill (25/27 already on lip ends)
-    if ((ne || nw) && !e && !w) return TILE.WALL_FILL;
-
-    // Wall-top strip (1/2/3). sampleMap: 1 above west cap, 2 mid, 3 east.
-    // Stepped walls: when a same-row FACE sits west/east, use 16/17 joiners.
-    const s2 = this.isWalkableCell(grid, x, y + 2);
-    const southIsWall =
-      y + 1 < grid.length && grid[y + 1][x] === CELL.WALL;
-    if (southIsWall && s2) {
-      const westIsFace =
-        !this.isWalkableCell(grid, x - 1, y) &&
-        this.isWalkableCell(grid, x - 1, y + 1);
-      const eastIsFace =
-        !this.isWalkableCell(grid, x + 1, y) &&
-        this.isWalkableCell(grid, x + 1, y + 1);
-      if (westIsFace && !eastIsFace) return TILE.WALL_EAST_ALT; // 16
-      if (eastIsFace && !westIsFace) return TILE.WALL_WEST_ALT; // 17
-      // Cap top lip before/after a corridor mouth ONLY when the adjacent
-      // side-rim cell is NOT itself top-latitude (would be blend 16/17).
-      // sampleMap uses 16|2|2… / …2|2|17 — never 16|1 or 3|17.
-      // Keep 15|1|2 / 2|3|13 for stepped plain-rim joins.
-      if (
-        !this.isWalkableCell(grid, x + 1, y) &&
-        this.isWalkableCell(grid, x + 2, y)
-      ) {
-        const eastTopLat =
-          y + 1 < grid.length &&
-          grid[y + 1][x + 1] === CELL.WALL &&
-          this.isWalkableCell(grid, x + 1, y + 2);
-        if (!eastTopLat) return TILE.WALL_TOP_E; // 3 after plain 13/15
-      }
-      if (
-        !this.isWalkableCell(grid, x - 1, y) &&
-        this.isWalkableCell(grid, x - 2, y)
-      ) {
-        const westTopLat =
-          y + 1 < grid.length &&
-          grid[y + 1][x - 1] === CELL.WALL &&
-          this.isWalkableCell(grid, x - 1, y + 2);
-        if (!westTopLat) return TILE.WALL_TOP_W; // 1 after plain 13/15
-      }
-      // True strip ends against void/empty (sampleMap 1|2|…|3)
-      const westVoid =
-        x === 0 ||
-        (grid[y][x - 1] !== CELL.WALL && !this.isWalkableCell(grid, x - 1, y));
-      const eastVoid =
-        x + 1 >= grid[0].length ||
-        (grid[y][x + 1] !== CELL.WALL && !this.isWalkableCell(grid, x + 1, y));
-      if (westVoid && !eastVoid) return TILE.WALL_TOP_W; // 1
-      if (eastVoid && !westVoid) return TILE.WALL_TOP_E; // 3
-      return TILE.WALL_TOP; // 2
-    }
-    if (southIsWall && !s2) {
-      const s2e = this.isWalkableCell(grid, x + 1, y + 2);
-      const s2w = this.isWalkableCell(grid, x - 1, y + 2);
-      if (s2e && !s2w) return TILE.WALL_TOP_W; // 1
-      if (s2w && !s2e) return TILE.WALL_TOP_E; // 3
-    }
-
-    return TILE.WALL_FILL;
   }
 
   occupied(tx, ty) {
@@ -353,7 +222,7 @@ export default class GameScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(101);
     this.hintText = this.add
-      .text(8, cam.height - 28, 'WASD / Arrows move · bump to attack · reach the pit stairs · R regen floor', {
+      .text(8, cam.height - 28, 'WASD move · bump attack · stairs next floor · R regen · E auto-tile editor', {
         fontFamily: 'monospace',
         fontSize: '12px',
         color: '#a09080',
